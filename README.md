@@ -1,3 +1,7 @@
 # mema bricks
 
-run using uv run main.py
+run using 
+
+```powershell
+uv run main.py
+```

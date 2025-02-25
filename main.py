@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum, auto
 from pathlib import Path
 from sys import exit
-from typing import ClassVar
+from typing import ClassVar, Sequence
 
 import pygame as pg
 
@@ -14,12 +14,13 @@ V2 = pg.Vector2
 pg.init()
 CLOCK: pg.Clock = pg.time.Clock()
 FPS = 60
+DT_TOL = 1e-7  # seconds tolerance when considering multiple collisions at the same time
 
 # fonts setup
-pg.freetype.init()
-FONT: pg.freetype.Font = pg.freetype.Font(Path(r"assets\fonts\PixelIntv-OPxd.ttf"))
+pg.freetype.init()  # type: ignore
+FONT: pg.freetype.Font = pg.freetype.Font(Path(r"assets\fonts\PixelIntv-OPxd.ttf"))  # type: ignore
 
-COLORS: dict[str : pg.typing.ColorLike] = {
+COLORS: dict[str, pg.typing.ColorLike] = {
     "BLACK": (0, 0, 0),
     "WHITE": (255, 255, 255),
     "DARK_GREY": (25, 25, 25),
@@ -85,7 +86,7 @@ class MovingEntity(Entity, ABC):
     vel: V2
 
     @abstractmethod
-    def move_and_collide(self, dt: float, others: list[Entity]) -> None:
+    def move_and_collide(self, dt: float, others: Sequence[Entity]) -> None:
         # Collide self with others
         ...
 
@@ -96,7 +97,7 @@ class MovingEntity(Entity, ABC):
 @dataclass
 class Paddle(MovingEntity):
     speed: float = 300.0  # pixels/second
-    enabled_collision_sides: ClassVar[list[Dir]] = [Dir.LEFT, Dir.RIGHT, Dir.DOWN]
+    enabled_collision_sides: ClassVar[list[Dir]] = [Dir.LEFT, Dir.RIGHT, Dir.UP]
 
     def handle_keyboard_input(self, key, event_type) -> None:
         if event_type == pg.KEYDOWN:
@@ -119,7 +120,7 @@ class Paddle(MovingEntity):
     #     if self.rect.top > GAME_FIELD_HEIGHT:
     #         self.rect.top = GAME_FIELD_HEIGHT
 
-    def move_and_collide(self, dt: float, _) -> None:
+    def move_and_collide(self, dt, others) -> None:
         # For paddle only calculate collision with edges
         self.move(dt)
         self.rect.clamp_ip(GAME_FIELD_SURFACE.get_rect())
@@ -130,13 +131,18 @@ class Brick(Entity):
     health: int = 1
 
 
+@dataclass
+class BrickLayout:
+    bricks: list[Brick]
+
+
 # TODO fix edges
 class Edge(Entity):
     thickness: ClassVar[int] = EDGE_WIDTH
-    color: ClassVar[pg.typing.ColorLike] = COLORS["WHITE"]
+    color: pg.typing.ColorLike = COLORS["WHITE"]
 
     @abstractmethod
-    def render_transform(self) -> dict[str : tuple[int, int]]: ...
+    def render_transform(self) -> dict[str, tuple[int, int]]: ...
 
     def render(self):
         # EDGES RENDER DIRECTLY TO SCREEN
@@ -149,7 +155,7 @@ class LeftEdge(Edge):
     def __init__(self):
         self.rect = pg.Rect((-self.thickness, 0), (self.thickness, GAME_FIELD_HEIGHT))
 
-    def render_transform(self) -> dict[str : tuple[int, int]]:
+    def render_transform(self) -> dict[str, tuple[int, int]]:
         return {"bottomright": GAME_FIELD_RECT_TO_SCREEN.bottomleft}
 
 
@@ -157,9 +163,9 @@ class RightEdge(Edge):
     enabled_collision_sides: ClassVar[list[Dir]] = [Dir.LEFT]
 
     def __init__(self):
-        self.rect = pg.Rect((GAME_FIELD_WIDTH + self.thickness, 0), (self.thickness, GAME_FIELD_HEIGHT))
+        self.rect = pg.Rect((GAME_FIELD_WIDTH, 0), (self.thickness, GAME_FIELD_HEIGHT))
 
-    def render_transform(self) -> dict[str : tuple[int, int]]:
+    def render_transform(self) -> dict[str, tuple[int, int]]:
         return {"bottomleft": GAME_FIELD_RECT_TO_SCREEN.bottomright}
 
 
@@ -169,7 +175,7 @@ class TopEdge(Edge):
     def __init__(self):
         self.rect = pg.Rect((self.thickness, -self.thickness), (GAME_FIELD_WIDTH + 2 * self.thickness, self.thickness))
 
-    def render_transform(self) -> dict[str : tuple[int, int]]:
+    def render_transform(self) -> dict[str, tuple[int, int]]:
         return {"midbottom": GAME_FIELD_RECT_TO_SCREEN.midtop}
 
 
@@ -197,61 +203,100 @@ class Ball(MovingEntity):
             return Dir.DOWN
         return Dir.STATIONARY
 
-    def move_and_collide(self, dt: float, others: list[Entity]):
+    def move_and_collide(self, dt: float, others: Sequence[Entity]) -> None:
         dt_remain = dt
         while True:
-            dt_to_collision, colliding_entity, collide_dir = self.find_next_collision(dt_remain, others)
+            collisions = self.find_next_collisions(dt_remain, others)
 
             # If no collision happen move and return out
-            if colliding_entity is None:
+            if not collisions:
                 self.move(dt_remain)
                 return
 
-            print(f"{dt=}")
-            print(f"{colliding_entity=}")
-            print(f"{dt_to_collision=}")
-            print(f"{collide_dir=}")
+            min_dt_to_collision = collisions[0][0]
 
-            self.move_and_collide_with(colliding_entity, dt_to_collision, collide_dir)
-            dt_remain -= dt_to_collision
+            dt_used: float = 0
+            for dt_to_collision, colliding_entity, collide_dir in collisions:
+                # If collision happens within the tolerance of the minimum dt_to_collision calculate the collision
+                if abs(dt_to_collision - min_dt_to_collision) <= DT_TOL:
+                    self.move_and_collide_with(colliding_entity, dt_to_collision, collide_dir)
+                    dt_used = dt_to_collision
+                    print(f"{colliding_entity=}, {dt_to_collision=}, {collide_dir=}, {dt_used=}")
+                    print()
+                else:  # list is sorted so break after the first time the condition is not true
+                    continue
+            dt_remain -= dt_used
 
-    def find_next_collision(self, dt_remain: float, others: list[Entity]) -> tuple[float, Entity]:
+    def find_next_collisions(self, dt_remain: float, others: Sequence[Entity]) -> list[tuple[float, Entity, Dir]]:
+        """Returns a list of tuples containing the possible collisions doing dt_remain. The list is sorted after the
+        time to collision
+
+        Args:
+            dt_remain (float): Remaining time in seconds.
+            others (list[Entity]): List of entities to possibly collide with.
+
+        Returns:
+            list[tuple[float, Entity, Dir]]: List of tuples containing the time for the collision, the entity that
+            collides and the direction of the collision
+        """
+
         moved_rect: pg.Rect = self.rect.copy().move(self.vel * dt_remain)
         potential_collisions: list[Entity] = [o for o in others if o.rect.colliderect(moved_rect)]
 
-        dt_to_collision: float = float("inf")
-        colliding_entity: Entity | None = None
-        collide_dir: Dir | None = None
+        collisions: list[tuple[float, Entity, Dir]] = []
 
         # Find first collision along velocity vector
         for pc in potential_collisions:
-            pc_dt = float("inf")
-
             # collide left side of self with right side of other
-            if self.move_dir_x == Dir.LEFT:
-                pc_dt: float = abs((self.rect.left - pc.rect.right) / self.vel.x)
-                pc_collide_dir = Dir.LEFT
+            if self.move_dir_x == Dir.LEFT and Dir.RIGHT in pc.enabled_collision_sides:
+                pc_dtx = abs((pc.rect.right - self.rect.left) / self.vel.x)
+                pc_collide_dirx = Dir.LEFT
             # collide right side of self with left side of other
-            elif self.move_dir_x == Dir.RIGHT:
-                pc_dt: float = abs((self.rect.right - pc.rect.left) / self.vel.x)
-                pc_collide_dir = Dir.RIGHT
-
-            if pc_dt <= dt_remain and pc_dt <= dt_to_collision:
-                dt_to_collision, colliding_entity, collide_dir = pc_dt, pc, pc_collide_dir
+            elif self.move_dir_x == Dir.RIGHT and Dir.LEFT in pc.enabled_collision_sides:
+                pc_dtx = abs((pc.rect.left - self.rect.right) / self.vel.x)
+                pc_collide_dirx = Dir.RIGHT
+            else:
+                pc_dtx = float("inf")
+                pc_collide_dirx = Dir.STATIONARY
+            x_collision: tuple[float, Entity, Dir] = (pc_dtx, pc, pc_collide_dirx)
 
             # collide top side of self with bottom side of other
-            if self.move_dir_y == Dir.UP:
-                pc_dt: float = abs((self.rect.top - pc.rect.bottom) / self.vel.y)
-                pc_collide_dir = Dir.TOP
+            if self.move_dir_y == Dir.UP and Dir.DOWN in pc.enabled_collision_sides:
+                pc_dty: float = abs((self.rect.top - pc.rect.bottom) / self.vel.y)
+                pc_collide_diry = Dir.TOP
             # collide bottom side of self with top side of other
-            elif self.move_dir_y == Dir.DOWN:
-                pc_dt: float = abs((self.rect.bottom - pc.rect.top) / self.vel.y)
-                pc_collide_dir = Dir.BOTTOM
+            elif self.move_dir_y == Dir.DOWN and Dir.UP in pc.enabled_collision_sides:
+                pc_dty: float = abs((self.rect.bottom - pc.rect.top) / self.vel.y)
+                pc_collide_diry = Dir.BOTTOM
+            else:
+                pc_dty = float("inf")
+                pc_collide_diry = Dir.STATIONARY
+            y_collision: tuple[float, Entity, Dir] = (pc_dty, pc, pc_collide_diry)
 
-            if pc_dt <= dt_remain and pc_dt <= dt_to_collision:
-                dt_to_collision, colliding_entity, collide_dir = pc_dt, pc, pc_collide_dir
+            if pc_collide_dirx == Dir.STATIONARY and pc_collide_diry == Dir.STATIONARY:
+                continue
 
-        return dt_to_collision, colliding_entity, collide_dir
+            # Test if either is stationary / not turned on
+            if pc_collide_diry == Dir.STATIONARY:
+                if pc_dtx <= dt_remain:
+                    collisions.append(x_collision)
+                continue
+            if pc_collide_dirx == Dir.STATIONARY:
+                if pc_dty <= dt_remain:
+                    collisions.append(y_collision)
+                continue
+
+            # Neither is stationary the greatest is the one that limits the hit
+            if abs(pc_dtx - pc_dty) < DT_TOL:
+                # Collisions in x and y happen simultaneously)
+                collisions.append(x_collision)
+                collisions.append(y_collision)
+            elif (pc_dtx < pc_dty or pc_collide_dirx == Dir.STATIONARY) and pc_dty <= dt_remain:
+                collisions.append((pc_dty, pc, pc_collide_diry))
+            elif (pc_dtx > pc_dty or pc_collide_diry == Dir.STATIONARY) and pc_dtx <= dt_remain:
+                collisions.append((pc_dtx, pc, pc_collide_dirx))
+
+        return sorted(collisions, key=lambda x: x[0])
 
     def move_and_collide_with(self, colliding_entity, dt_to_collision, collide_dir):
         # Move
@@ -261,7 +306,7 @@ class Ball(MovingEntity):
         if hasattr(colliding_entity, "health"):
             colliding_entity.health -= self.damage
 
-    def reflect(self, reflect_dir: Dir):
+    def reflect(self, reflect_dir: Dir) -> None:
         match reflect_dir:
             case Dir.LEFT:
                 reflect_normal = (1.0, 0.0)
@@ -274,32 +319,20 @@ class Ball(MovingEntity):
             case _:
                 return
 
-        print(reflect_normal)
-        self.vel.reflect_ip(reflect_normal)
-
-    def collide_edges(self, dt) -> None:
-        moved_rect = self.rect.copy().move(self.vel * dt)
-        if moved_rect.left < 0:
-            self.vel.reflect_ip(V2(1, 0))
-            print("Ball collide left wall")
-        elif moved_rect.right > GAME_FIELD_WIDTH:
-            self.vel.reflect_ip(V2(-1, 0))
-            print("Ball collide right wall")
-
-        if moved_rect.top < 0:
-            self.vel.reflect_ip(V2(0, 1))
-            print("Ball collide top")
+        # only reflect if velocity is opposite normal
+        if self.vel.dot(reflect_normal) < 0:
+            self.vel.reflect_ip(reflect_normal)
 
 
 class Game:
-    def __init__(self):
+    def __init__(self) -> None:
         self.state: States = States.GAME_RUNNING
 
         # Create paddle
         self.paddle: Paddle = Paddle(
             rect=pg.Rect(
                 (0, 0),
-                V2(200, 20),
+                V2(800, 20),
             ).move_to(center=(GAME_FIELD_WIDTH / 2, GAME_FIELD_HEIGHT - 30)),
             vel=V2(0, 0),
             color=COLORS["LIGHT_GREY"],
@@ -311,7 +344,7 @@ class Game:
                 (0, 0),
                 V2(15, 15),
             ).move_to(midbottom=self.paddle.rect.midtop),
-            vel=V2(-1, -1),
+            vel=V2(-1, -0.1),
             color=COLORS["WHITE"],
         )
         self.balls: list[Ball] = [self.ball]
@@ -340,14 +373,14 @@ class Game:
         global score
         score = 0
 
-    def get_all_entites(self) -> list:
+    def get_all_entities(self) -> list:
         return [self.paddle] + self.balls + self.bricks + self.edges
 
-    def render_all_entities(self):
-        for entity in self.get_all_entites():
+    def render_all_entities(self) -> None:
+        for entity in self.get_all_entities():
             entity.render()
 
-    def handle_pause_quit_restart(self, key, event_type):
+    def handle_pause_quit_restart(self, key, event_type) -> None:
         if event_type == pg.KEYDOWN:
             if key in (pg.K_q, pg.K_ESCAPE):
                 self.state = States.EXITING
@@ -358,7 +391,7 @@ class Game:
             elif key == pg.K_p and self.state == States.GAME_RUNNING:
                 self.state = States.GAME_PAUSED
 
-    def game_loop(self, dt: float):
+    def game_loop(self, dt: float) -> None:
         global score
 
         # Handle input
@@ -369,7 +402,7 @@ class Game:
                     self.paddle.handle_keyboard_input(key, event.type)
 
         # Do move and collide
-        self.paddle.move_and_collide(dt, None)
+        self.paddle.move_and_collide(dt, self.edges)
 
         others = [self.paddle] + self.bricks + self.edges
         for ball in self.balls:
@@ -398,7 +431,7 @@ class Game:
 
     def exiting(self) -> None:
         print("Exiting")
-        exit(1)
+        exit(0)
 
 
 def main():

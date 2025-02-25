@@ -2,5 +2,19 @@
     "editor.formatOnSave": true,
     "editor.rulers": [
         120
+    ],
+    "python.analysis.languageServerMode": "full",
+    "python.analysis.typeCheckingMode": "standard",
+    "cSpell.words": [
+        "blit",
+        "colliderect",
+        "freetype",
+        "Intv",
+        "KEYUP",
+        "mema",
+        "midbottom",
+        "midtop",
+        "pygame",
+        "SRCALPHA"
     ]
 }

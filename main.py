@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
 from sys import exit
@@ -75,7 +75,7 @@ score = 0
 class Entity(ABC):
     rect: pg.Rect
     color: pg.typing.ColorLike
-    enabled_collision_sides: ClassVar[list[Dir]] = [Dir.LEFT, Dir.RIGHT, Dir.UP, Dir.DOWN]
+    enabled_collision_sides: set[Dir] = field(default_factory=lambda: set([Dir.LEFT, Dir.RIGHT, Dir.UP, Dir.DOWN]))
 
     def render(self) -> None:
         pg.draw.rect(GAME_FIELD_SURFACE, self.color, self.rect)
@@ -83,7 +83,7 @@ class Entity(ABC):
 
 @dataclass
 class MovingEntity(Entity, ABC):
-    vel: V2
+    vel: V2 = field(default_factory=lambda: V2(0, 0))
 
     @abstractmethod
     def move_and_collide(self, dt: float, others: Sequence[Entity]) -> None:
@@ -97,7 +97,7 @@ class MovingEntity(Entity, ABC):
 @dataclass
 class Paddle(MovingEntity):
     speed: float = 300.0  # pixels/second
-    enabled_collision_sides: ClassVar[list[Dir]] = [Dir.LEFT, Dir.RIGHT, Dir.UP]
+    enabled_collision_sides: set[Dir] = field(default_factory=lambda: set([Dir.LEFT, Dir.RIGHT, Dir.UP]))
 
     def handle_keyboard_input(self, key, event_type) -> None:
         if event_type == pg.KEYDOWN:
@@ -139,7 +139,7 @@ class Edge(Entity):
 
 
 class LeftEdge(Edge):
-    enabled_collision_sides: ClassVar[list[Dir]] = [Dir.RIGHT]
+    enabled_collision_sides: set[Dir] = set([Dir.RIGHT])
 
     def __init__(self):
         self.rect = pg.Rect((-self.thickness, 0), (self.thickness, GAME_FIELD_HEIGHT))
@@ -149,7 +149,7 @@ class LeftEdge(Edge):
 
 
 class RightEdge(Edge):
-    enabled_collision_sides: ClassVar[list[Dir]] = [Dir.LEFT]
+    enabled_collision_sides: set[Dir] = set([Dir.LEFT])
 
     def __init__(self):
         self.rect = pg.Rect((GAME_FIELD_WIDTH, 0), (self.thickness, GAME_FIELD_HEIGHT))
@@ -159,7 +159,7 @@ class RightEdge(Edge):
 
 
 class TopEdge(Edge):
-    enabled_collision_sides: ClassVar[list[Dir]] = [Dir.BOTTOM]
+    enabled_collision_sides: set[Dir] = set([Dir.BOTTOM])
 
     def __init__(self):
         self.rect = pg.Rect((self.thickness, -self.thickness), (GAME_FIELD_WIDTH + 2 * self.thickness, self.thickness))
@@ -173,15 +173,33 @@ class Brick(Entity):
     health: int = 1
 
 
-@dataclass
-class BrickLayout:
-    bricks: list[Brick]
-    edges: list[Edge]
+def update_enabled_collision_sides(bricks: list[Brick], edges: list[Edge]):
+    all_entities = bricks + edges
 
-    def update_enabled_collision_sides(self):
-        for brick in self.bricks:
-            # TODO
-            ...
+    for brick in bricks:
+        brick.enabled_collision_sides = set([Dir.LEFT, Dir.RIGHT, Dir.TOP, Dir.BOTTOM])
+
+        test_rect = brick.rect
+        left_line = (test_rect.topleft, test_rect.bottomleft)
+        right_line = (test_rect.topright, test_rect.bottomright)
+        top_line = (test_rect.topleft, test_rect.topright)
+        bottom_line = (test_rect.bottomleft, test_rect.bottomright)
+
+        for entity in all_entities:
+            if entity == brick:
+                continue
+
+            if Dir.LEFT in brick.enabled_collision_sides and entity.rect.clipline(left_line):
+                brick.enabled_collision_sides.remove(Dir.LEFT)
+
+            if Dir.RIGHT in brick.enabled_collision_sides and entity.rect.clipline(right_line):
+                brick.enabled_collision_sides.remove(Dir.RIGHT)
+
+            if Dir.TOP in brick.enabled_collision_sides and entity.rect.clipline(top_line):
+                brick.enabled_collision_sides.remove(Dir.TOP)
+
+            if Dir.BOTTOM in brick.enabled_collision_sides and entity.rect.clipline(bottom_line):
+                brick.enabled_collision_sides.remove(Dir.BOTTOM)
 
 
 @dataclass
@@ -373,6 +391,8 @@ class Game:
             TopEdge(),
             RightEdge(),
         ]
+
+        update_enabled_collision_sides(self.bricks, self.edges)
 
         # Reset score
         global score

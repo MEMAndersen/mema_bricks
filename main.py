@@ -126,17 +126,6 @@ class Paddle(MovingEntity):
         self.rect.clamp_ip(GAME_FIELD_SURFACE.get_rect())
 
 
-@dataclass
-class Brick(Entity):
-    health: int = 1
-
-
-@dataclass
-class BrickLayout:
-    bricks: list[Brick]
-
-
-# TODO fix edges
 class Edge(Entity):
     thickness: ClassVar[int] = EDGE_WIDTH
     color: pg.typing.ColorLike = COLORS["WHITE"]
@@ -177,6 +166,22 @@ class TopEdge(Edge):
 
     def render_transform(self) -> dict[str, tuple[int, int]]:
         return {"midbottom": GAME_FIELD_RECT_TO_SCREEN.midtop}
+
+
+@dataclass
+class Brick(Entity):
+    health: int = 1
+
+
+@dataclass
+class BrickLayout:
+    bricks: list[Brick]
+    edges: list[Edge]
+
+    def update_enabled_collision_sides(self):
+        for brick in self.bricks:
+            # TODO
+            ...
 
 
 @dataclass
@@ -291,10 +296,10 @@ class Ball(MovingEntity):
                 # Collisions in x and y happen simultaneously)
                 collisions.append(x_collision)
                 collisions.append(y_collision)
-            elif (pc_dtx < pc_dty or pc_collide_dirx == Dir.STATIONARY) and pc_dty <= dt_remain:
-                collisions.append((pc_dty, pc, pc_collide_diry))
-            elif (pc_dtx > pc_dty or pc_collide_diry == Dir.STATIONARY) and pc_dtx <= dt_remain:
-                collisions.append((pc_dtx, pc, pc_collide_dirx))
+            elif pc_dtx < pc_dty and pc_dtx <= dt_remain:
+                collisions.append(x_collision)
+            elif pc_dtx > pc_dty and pc_dty <= dt_remain:
+                collisions.append(y_collision)
 
         return sorted(collisions, key=lambda x: x[0])
 
@@ -344,7 +349,7 @@ class Game:
                 (0, 0),
                 V2(15, 15),
             ).move_to(midbottom=self.paddle.rect.midtop),
-            vel=V2(-1, -0.1),
+            vel=V2(-1, -1),
             color=COLORS["WHITE"],
         )
         self.balls: list[Ball] = [self.ball]

@@ -30,7 +30,7 @@ COLORS: dict[str, pg.typing.ColorLike] = {
     "LIGHT_GREY": (155, 155, 155),
     "PAUSE_OVERLAY": (0, 0, 0, 200),
     "DEBUG": (255, 0, 0),
-    "YELLOW": (0, 255, 255),
+    "YELLOW": (255, 255, 0),
 }
 
 EDGE_WIDTH = 20
@@ -127,6 +127,7 @@ class Entity(ABC):
 
 @dataclass
 class MovingEntity(Entity, ABC):
+    speed: float = 0
     vel: V2 = field(default_factory=lambda: V2(0, 0))
 
     @abstractmethod
@@ -239,7 +240,7 @@ def update_enabled_collision_sides(bricks_to_check: Sequence[Brick], others: Seq
 
 @dataclass
 class Ball(MovingEntity):
-    speed: float = 400.0  # pixels/second
+    speed: float = 100.0  # pixels/second
     damage: int = 1
 
     def __post_init__(self):
@@ -281,7 +282,8 @@ class Ball(MovingEntity):
                     dt_used = dt_to_collision
                 else:  # list is sorted so break after the first time the condition is not true
                     continue
-                dt_remain -= dt_used
+            dt_remain -= dt_used  # subtract only the used dt after all collisions
+            print(dt_remain)
 
     def find_next_collisions(self, dt_remain: float, others: Sequence[Entity]) -> list[tuple[float, Entity, Dir]]:
         """Returns a list of tuples containing the possible collisions doing dt_remain. The list is sorted after the
@@ -297,7 +299,9 @@ class Ball(MovingEntity):
         """
 
         moved_rect: pg.Rect = self.rect.copy().move(self.vel * dt_remain)
-        potential_collisions: list[Entity] = [o for o in others if o.rect.colliderect(moved_rect)]
+        potential_collisions: list[Entity] = [
+            o for o in others if o.enabled_collision_sides and o.rect.colliderect(moved_rect)
+        ]
 
         collisions: list[tuple[float, Entity, Dir]] = []
 
@@ -378,6 +382,11 @@ class Ball(MovingEntity):
         # only reflect if velocity is opposite normal
         if self.vel.dot(reflect_normal) < 0:
             self.vel = self.vel.reflect(reflect_normal).normalize() * self.speed
+
+
+def render_ball_velocity(ball: Ball):
+    vel_text, _ = FONT.render(f"{int(ball.vel.length())}", COLORS["YELLOW"], size=25)
+    SCREEN.blit(vel_text, vel_text.get_rect(bottomleft=(0, SCREEN_HEIGHT)))
 
 
 class Game:
@@ -487,6 +496,7 @@ class Game:
             self.bricks.remove(entity)
 
         # Render
+        render_ball_velocity(self.balls[0])
         self.render_all_entities()
 
     def paused_loop(self):
@@ -536,7 +546,7 @@ def main():
         # Update the screen
         show_fps(CLOCK.get_fps())
         pg.display.flip()
-        dt = CLOCK.tick(2 * FPS) * 1e-3
+        dt = CLOCK.tick(FPS) * 1e-3
 
 
 if __name__ == "__main__":

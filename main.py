@@ -7,6 +7,9 @@ from typing import ClassVar, Sequence
 
 import pygame as pg
 
+# Debug flag
+DEBUG = True
+
 # Aliases
 V2 = pg.Vector2
 
@@ -25,7 +28,9 @@ COLORS: dict[str, pg.typing.ColorLike] = {
     "WHITE": (255, 255, 255),
     "DARK_GREY": (25, 25, 25),
     "LIGHT_GREY": (155, 155, 155),
-    "PAUSE_OVERLAY": (0, 0, 0, 125),
+    "PAUSE_OVERLAY": (0, 0, 0, 200),
+    "DEBUG": (255, 0, 0),
+    "YELLOW": (0, 255, 255),
 }
 
 EDGE_WIDTH = 20
@@ -67,6 +72,11 @@ class Dir(Enum):
     STATIONARY = auto()
 
 
+def show_fps(fps: float) -> None:
+    fps_text, _ = FONT.render(f"{int(fps)}", COLORS["YELLOW"], size=25)
+    SCREEN.blit(fps_text, fps_text.get_rect(topleft=(0, 0)))
+
+
 # Global variables
 score = 0
 
@@ -76,9 +86,43 @@ class Entity(ABC):
     rect: pg.Rect
     color: pg.typing.ColorLike
     enabled_collision_sides: set[Dir] = field(default_factory=lambda: set([Dir.LEFT, Dir.RIGHT, Dir.UP, Dir.DOWN]))
+    to_be_deleted: bool = False
 
     def render(self) -> None:
         pg.draw.rect(GAME_FIELD_SURFACE, self.color, self.rect)
+
+        if DEBUG:
+            self.debug_render()
+
+    def debug_render(self) -> None:
+        # render collision sides
+        if Dir.LEFT in self.enabled_collision_sides:
+            pg.draw.line(GAME_FIELD_SURFACE, COLORS["DEBUG"], self.rect.topleft, self.rect.bottomleft)
+        if Dir.RIGHT in self.enabled_collision_sides:
+            pg.draw.line(GAME_FIELD_SURFACE, COLORS["DEBUG"], self.rect.topright, self.rect.bottomright)
+        if Dir.TOP in self.enabled_collision_sides:
+            pg.draw.line(GAME_FIELD_SURFACE, COLORS["DEBUG"], self.rect.topleft, self.rect.topright)
+        if Dir.BOTTOM in self.enabled_collision_sides:
+            pg.draw.line(GAME_FIELD_SURFACE, COLORS["DEBUG"], self.rect.bottomleft, self.rect.bottomright)
+
+    def left_line(self) -> tuple[V2, V2]:
+        test_rect = self.rect
+        return (test_rect.topleft + V2(-1, 1), test_rect.bottomleft + V2(-1, -1))
+
+    def right_line(self) -> tuple[V2, V2]:
+        test_rect = self.rect
+        return (test_rect.topright + V2(1, 1), test_rect.bottomright + V2(1, -1))
+
+    def top_line(self) -> tuple[V2, V2]:
+        test_rect = self.rect
+        return (test_rect.topleft + V2(1, -1), test_rect.topright + V2(-1, -1))
+
+    def bottom_line(self) -> tuple[V2, V2]:
+        test_rect = self.rect
+        return (test_rect.bottomleft + V2(1, 1), test_rect.bottomright + V2(-1, 1))
+
+    def is_neighbor(self, other) -> bool:
+        return self.rect.copy().inflate(4, 4).colliderect(other.rect)
 
 
 @dataclass
@@ -110,15 +154,6 @@ class Paddle(MovingEntity):
                 self.vel.x += self.speed
             elif key in (pg.K_d, pg.K_RIGHT):
                 self.vel.x -= self.speed
-
-    # def collide_edges(self) -> None:
-    #     if self.rect.left < 0:
-    #         self.rect.left = 0
-    #     elif self.rect.right > GAME_FIELD_WIDTH:
-    #         self.rect.right = GAME_FIELD_WIDTH
-
-    #     if self.rect.top > GAME_FIELD_HEIGHT:
-    #         self.rect.top = GAME_FIELD_HEIGHT
 
     def move_and_collide(self, dt, others) -> None:
         # For paddle only calculate collision with edges
@@ -171,34 +206,34 @@ class TopEdge(Edge):
 @dataclass
 class Brick(Entity):
     health: int = 1
+    neighbors: list["Brick"] = field(default_factory=lambda: list(), repr=False)
+
+    def update_neighbors(self, others: list["Brick"]) -> None:
+        self.neighbors = [o for o in others if self.is_neighbor(o)]
 
 
-def update_enabled_collision_sides(bricks: list[Brick], edges: list[Edge]):
-    all_entities = bricks + edges
-
-    for brick in bricks:
+def update_enabled_collision_sides(bricks_to_check: Sequence[Brick], others: Sequence[Entity]):
+    for brick in [b for b in bricks_to_check if not b.to_be_deleted]:
         brick.enabled_collision_sides = set([Dir.LEFT, Dir.RIGHT, Dir.TOP, Dir.BOTTOM])
 
-        test_rect = brick.rect
-        left_line = (test_rect.topleft, test_rect.bottomleft)
-        right_line = (test_rect.topright, test_rect.bottomright)
-        top_line = (test_rect.topleft, test_rect.topright)
-        bottom_line = (test_rect.bottomleft, test_rect.bottomright)
+        possible_neighbors = [e for e in others if not e.to_be_deleted] + [
+            e for e in brick.neighbors if not e.to_be_deleted
+        ]
 
-        for entity in all_entities:
-            if entity == brick:
+        for other in possible_neighbors:
+            if other == brick:
                 continue
 
-            if Dir.LEFT in brick.enabled_collision_sides and entity.rect.clipline(left_line):
+            if Dir.LEFT in brick.enabled_collision_sides and other.rect.clipline(brick.left_line()):
                 brick.enabled_collision_sides.remove(Dir.LEFT)
 
-            if Dir.RIGHT in brick.enabled_collision_sides and entity.rect.clipline(right_line):
+            if Dir.RIGHT in brick.enabled_collision_sides and other.rect.clipline(brick.right_line()):
                 brick.enabled_collision_sides.remove(Dir.RIGHT)
 
-            if Dir.TOP in brick.enabled_collision_sides and entity.rect.clipline(top_line):
+            if Dir.TOP in brick.enabled_collision_sides and other.rect.clipline(brick.top_line()):
                 brick.enabled_collision_sides.remove(Dir.TOP)
 
-            if Dir.BOTTOM in brick.enabled_collision_sides and entity.rect.clipline(bottom_line):
+            if Dir.BOTTOM in brick.enabled_collision_sides and other.rect.clipline(brick.bottom_line()):
                 brick.enabled_collision_sides.remove(Dir.BOTTOM)
 
 
@@ -208,7 +243,7 @@ class Ball(MovingEntity):
     damage: int = 1
 
     def __post_init__(self):
-        self.vel = self.vel * self.speed / self.vel.magnitude()
+        self.vel = self.vel.normalize() * self.speed
 
     @property
     def move_dir_x(self) -> Dir | None:
@@ -244,11 +279,9 @@ class Ball(MovingEntity):
                 if abs(dt_to_collision - min_dt_to_collision) <= DT_TOL:
                     self.move_and_collide_with(colliding_entity, dt_to_collision, collide_dir)
                     dt_used = dt_to_collision
-                    print(f"{colliding_entity=}, {dt_to_collision=}, {collide_dir=}, {dt_used=}")
-                    print()
                 else:  # list is sorted so break after the first time the condition is not true
                     continue
-            dt_remain -= dt_used
+                dt_remain -= dt_used
 
     def find_next_collisions(self, dt_remain: float, others: Sequence[Entity]) -> list[tuple[float, Entity, Dir]]:
         """Returns a list of tuples containing the possible collisions doing dt_remain. The list is sorted after the
@@ -344,7 +377,7 @@ class Ball(MovingEntity):
 
         # only reflect if velocity is opposite normal
         if self.vel.dot(reflect_normal) < 0:
-            self.vel.reflect_ip(reflect_normal)
+            self.vel = self.vel.reflect(reflect_normal).normalize() * self.speed
 
 
 class Game:
@@ -377,6 +410,9 @@ class Game:
         brick_width = 40
         brick_height = 20
         for i in range(int(800 / brick_width)):
+            if i % 2 == 0:
+                continue
+
             for j in range(int(500 / brick_height)):
                 self.bricks.append(
                     Brick(
@@ -392,18 +428,23 @@ class Game:
             RightEdge(),
         ]
 
+        for brick in self.bricks:
+            brick.update_neighbors(self.bricks)
+
         update_enabled_collision_sides(self.bricks, self.edges)
 
         # Reset score
         global score
         score = 0
 
-    def get_all_entities(self) -> list:
+    def get_all_entities(self) -> Sequence[Entity]:
         return [self.paddle] + self.balls + self.bricks + self.edges
 
     def render_all_entities(self) -> None:
         for entity in self.get_all_entities():
             entity.render()
+
+        SCREEN.blit(GAME_FIELD_SURFACE, GAME_FIELD_RECT_TO_SCREEN)
 
     def handle_pause_quit_restart(self, key, event_type) -> None:
         if event_type == pg.KEYDOWN:
@@ -433,15 +474,20 @@ class Game:
         for ball in self.balls:
             ball.move_and_collide(dt, others)
 
+        bricks_to_check: list[Brick] = []
         for brick in self.bricks:
             if brick.health <= 0:
                 score += 5
-                print(f"score: {score}")
-                self.bricks.remove(brick)
+                brick.to_be_deleted = True
+                bricks_to_check.extend(brick.neighbors)
+
+        update_enabled_collision_sides(bricks_to_check, self.edges)
+
+        for entity in [e for e in self.bricks if e.to_be_deleted]:
+            self.bricks.remove(entity)
 
         # Render
         self.render_all_entities()
-        SCREEN.blit(GAME_FIELD_SURFACE, GAME_FIELD_RECT_TO_SCREEN)
 
     def paused_loop(self):
         # Handle input
@@ -488,8 +534,9 @@ def main():
                 continue
 
         # Update the screen
+        show_fps(CLOCK.get_fps())
         pg.display.flip()
-        dt = CLOCK.tick(FPS) * 1e-3
+        dt = CLOCK.tick(2 * FPS) * 1e-3
 
 
 if __name__ == "__main__":

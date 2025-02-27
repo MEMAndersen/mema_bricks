@@ -16,7 +16,8 @@ V2 = pg.Vector2
 # pygame setup
 pg.init()
 CLOCK: pg.Clock = pg.time.Clock()
-FPS = 60
+FPS = 80  # frame per sec
+CPS = 200  # Compute per sec
 DT_TOL = 1e-7  # seconds tolerance when considering multiple collisions at the same time
 
 # fonts setup
@@ -38,7 +39,7 @@ EDGE_WIDTH = 20
 SCREEN_WIDTH: int = 1248
 SCREEN_HEIGHT: int = 800
 SCREEN_SIZE: tuple[int, int] = (SCREEN_WIDTH, SCREEN_HEIGHT)
-SCREEN: pg.Surface = pg.display.set_mode(SCREEN_SIZE)
+SCREEN: pg.Surface = pg.display.set_mode(SCREEN_SIZE, vsync=0)
 
 GAME_FIELD_WIDTH: int = SCREEN_HEIGHT
 GAME_FIELD_HEIGHT: int = SCREEN_HEIGHT - EDGE_WIDTH
@@ -72,9 +73,13 @@ class Dir(Enum):
     STATIONARY = auto()
 
 
-def show_fps(fps: float) -> None:
-    fps_text, _ = FONT.render(f"{int(fps)}", COLORS["YELLOW"], size=25)
+def show_fps_cps(fps: float, cps: float) -> None:
+    size = 25
+    fps_text, _ = FONT.render(f"FPS: {int(fps)}", COLORS["YELLOW"], size=size)
+    cps_text, _ = FONT.render(f"CPS: {int(cps)}", COLORS["YELLOW"], size=size)
+
     SCREEN.blit(fps_text, fps_text.get_rect(topleft=(0, 0)))
+    SCREEN.blit(cps_text, cps_text.get_rect(topleft=(0, size + 5)))
 
 
 # Global variables
@@ -127,7 +132,8 @@ class Entity(ABC):
 
 @dataclass
 class MovingEntity(Entity, ABC):
-    speed: float = 0
+    speed: float = 0  # pix/ms
+    max_speed: float = float("inf")  # pix/ms
     vel: V2 = field(default_factory=lambda: V2(0, 0))
 
     @abstractmethod
@@ -136,12 +142,14 @@ class MovingEntity(Entity, ABC):
         ...
 
     def move(self, dt) -> None:
-        self.rect.center += self.vel * dt
+        self.vel.clamp_magnitude_ip(0, self.max_speed)
+        self.rect.move_ip(self.vel * dt)
 
 
 @dataclass
 class Paddle(MovingEntity):
-    speed: float = 300.0  # pixels/second
+    speed: float = 300.0 * 1e-3  # pix/ms
+    max_speed: float = float("inf")  # pix/ms
     enabled_collision_sides: set[Dir] = field(default_factory=lambda: set([Dir.LEFT, Dir.RIGHT, Dir.UP]))
 
     def handle_keyboard_input(self, key, event_type) -> None:
@@ -240,7 +248,8 @@ def update_enabled_collision_sides(bricks_to_check: Sequence[Brick], others: Seq
 
 @dataclass
 class Ball(MovingEntity):
-    speed: float = 100.0  # pixels/second
+    speed: float = 400.0 * 1e-3  # pix/ms
+    max_speed: float = 1000.0 * 1e-3  # pix/ms
     damage: int = 1
 
     def __post_init__(self):
@@ -278,12 +287,11 @@ class Ball(MovingEntity):
             for dt_to_collision, colliding_entity, collide_dir in collisions:
                 # If collision happens within the tolerance of the minimum dt_to_collision calculate the collision
                 if abs(dt_to_collision - min_dt_to_collision) <= DT_TOL:
-                    self.move_and_collide_with(colliding_entity, dt_to_collision, collide_dir)
+                    self.move_and_collide_with(colliding_entity, dt_to_collision - dt_used, collide_dir)
                     dt_used = dt_to_collision
                 else:  # list is sorted so break after the first time the condition is not true
                     continue
             dt_remain -= dt_used  # subtract only the used dt after all collisions
-            print(dt_remain)
 
     def find_next_collisions(self, dt_remain: float, others: Sequence[Entity]) -> list[tuple[float, Entity, Dir]]:
         """Returns a list of tuples containing the possible collisions doing dt_remain. The list is sorted after the
@@ -397,7 +405,7 @@ class Game:
         self.paddle: Paddle = Paddle(
             rect=pg.Rect(
                 (0, 0),
-                V2(800, 20),
+                V2(100, 20),
             ).move_to(center=(GAME_FIELD_WIDTH / 2, GAME_FIELD_HEIGHT - 30)),
             vel=V2(0, 0),
             color=COLORS["LIGHT_GREY"],
@@ -466,7 +474,7 @@ class Game:
             elif key == pg.K_p and self.state == States.GAME_RUNNING:
                 self.state = States.GAME_PAUSED
 
-    def game_loop(self, dt: float) -> None:
+    def game_loop_logic(self, dt: float) -> None:
         global score
 
         # Handle input
@@ -495,18 +503,18 @@ class Game:
         for entity in [e for e in self.bricks if e.to_be_deleted]:
             self.bricks.remove(entity)
 
-        # Render
+    def game_loop_render(self) -> None:
         render_ball_velocity(self.balls[0])
         self.render_all_entities()
 
-    def paused_loop(self):
+    def paused_loop_logic(self) -> None:
         # Handle input
         for event in pg.event.get():
             match event.dict:
                 case {"key": key} if event.type in [pg.KEYDOWN, pg.KEYUP]:
                     self.handle_pause_quit_restart(key, event.type)
 
-        # Render
+    def paused_loop_render(self) -> None:
         self.render_all_entities()
         SCREEN.blit(PAUSE_OVERLAY)
 
@@ -517,7 +525,9 @@ class Game:
 
 def main():
     game = Game()
-    dt: float = 0
+    dt: int = 0  # ms
+    frame_dt: int = 0  # ms
+    fps: list[float] = [0.0]
 
     while True:
         # Clear screen
@@ -527,26 +537,54 @@ def main():
         if pg.event.peek(pg.QUIT):
             game.state = States.EXITING
 
+        # Update and collision
         match game.state:
             case States.MAIN_MENU_SCREEN:
                 pass
             case States.GAME_RUNNING:
-                game.game_loop(dt)
+                game.game_loop_logic(dt)
             case States.GAME_PAUSED:
-                game.paused_loop()
+                game.paused_loop_logic()
             case States.GAME_OVER_SCREEN:
                 pass
             case States.EXITING:
                 game.exiting()
             case States.RESTART:
                 game = Game()
-                dt: float = 0
+                dt: int = 0
                 continue
 
-        # Update the screen
-        show_fps(CLOCK.get_fps())
-        pg.display.flip()
-        dt = CLOCK.tick(FPS) * 1e-3
+        # Update the clock
+        dt: int = CLOCK.tick(CPS)
+        frame_dt += dt
+        cps = CLOCK.get_fps()
+        show_fps_cps(cps, sum(fps) / 10)
+
+        # Render
+        if frame_dt >= 1e3 / FPS:
+            match game.state:
+                case States.MAIN_MENU_SCREEN:
+                    pass
+                case States.GAME_RUNNING:
+                    game.game_loop_render()
+                case States.GAME_PAUSED:
+                    game.paused_loop_logic()
+                case States.GAME_OVER_SCREEN:
+                    pass
+                case States.EXITING:
+                    game.exiting()
+                case States.RESTART:
+                    game = Game()
+                    dt: int = 0
+                    continue
+
+            # Update the screen
+            pg.display.flip()
+            fps.append(1e3 / frame_dt)
+            if len(fps) > 10:
+                fps.pop(0)
+
+            frame_dt -= int(1e3 / FPS)
 
 
 if __name__ == "__main__":

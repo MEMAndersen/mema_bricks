@@ -72,6 +72,20 @@ class Dir(Enum):
     STATIONARY = auto()
 
 
+def get_vector_dir(reflect_dir: Dir) -> V2:
+    match reflect_dir:
+        case Dir.LEFT:
+            return V2(1.0, 0.0)
+        case Dir.RIGHT:
+            return V2(-1.0, 0.0)
+        case Dir.UP:
+            return V2(0.0, 1.0)
+        case Dir.DOWN:
+            return V2(0.0, -1.0)
+        case _:
+            return V2(0.0, 0.0)
+
+
 def show_fps_cps(fps: float) -> None:
     size = 25
     fps_text, _ = FONT.render(f"FPS: {int(fps)}", COLORS["YELLOW"], size=size)
@@ -365,27 +379,72 @@ class Ball(MovingEntity):
     def move_and_collide_with(self, colliding_entity, dt_to_collision, collide_dir):
         # Move
         self.move(dt_to_collision)
-        self.reflect(collide_dir)
 
-        if hasattr(colliding_entity, "health"):
-            colliding_entity.health -= self.damage
+        if isinstance(colliding_entity, Paddle):
+            self.reflect_on_paddle(collide_dir, colliding_entity)
+        else:
+            self.reflect(collide_dir)
+            if hasattr(colliding_entity, "health"):
+                colliding_entity.health -= self.damage
 
     def reflect(self, reflect_dir: Dir) -> None:
-        match reflect_dir:
-            case Dir.LEFT:
-                reflect_normal = (1.0, 0.0)
-            case Dir.RIGHT:
-                reflect_normal = (-1.0, 0.0)
-            case Dir.UP:
-                reflect_normal = (0.0, 1.0)
-            case Dir.DOWN:
-                reflect_normal = (0.0, -1.0)
-            case _:
-                return
+        reflect_normal = get_vector_dir(reflect_dir)
 
         # only reflect if velocity is opposite normal
         if self.vel.dot(reflect_normal) < 0:
-            self.vel = self.vel.reflect(reflect_normal).normalize() * self.speed
+            self.vel.reflect_ip(reflect_normal)
+
+    def reflect_on_paddle(self, reflect_dir: Dir, paddle: Paddle) -> None:
+        angle_change = reflect_rotate(paddle, self.rect.centerx)
+
+        print(angle_change)
+
+        reflect_normal = get_vector_dir(reflect_dir).rotate(angle_change)
+
+        print(reflect_normal)
+
+        # only reflect if velocity is opposite normal
+        if self.vel.dot(reflect_normal) < 0:
+            self.vel.reflect_ip(reflect_normal)
+
+        self.clamp_vel_angle()
+
+    def clamp_vel_angle(self):
+        MINIMUM_VEL_ANGLE = 60
+
+        vel_angle = self.vel.angle_to(V2(0, -1))
+
+        print(f"{vel_angle=}")
+
+        if vel_angle < -MINIMUM_VEL_ANGLE:
+            self.vel.rotate_ip((vel_angle + MINIMUM_VEL_ANGLE))
+            print(f"CLAMPED: {self.vel.angle_to(V2(0, -1))}")
+        elif vel_angle > MINIMUM_VEL_ANGLE:
+            self.vel.rotate_ip((vel_angle - MINIMUM_VEL_ANGLE))
+            print(f"CLAMPED: {self.vel.angle_to(V2(0, -1))}")
+
+
+def reflect_rotate(paddle: Paddle, x) -> float:
+    PADDLE_REFLECT_MAX_ROTATE = 8  # degrees
+    PADDLE_NEUTRAL_REFLECT_RATIO = 0.05
+
+    p_width = paddle.rect.width
+    p_width_neutral = p_width * PADDLE_NEUTRAL_REFLECT_RATIO
+    p_width_linear = (p_width - p_width_neutral) / 2
+    xr = x - paddle.rect.centerx
+
+    # ax+b=angle
+    a = PADDLE_REFLECT_MAX_ROTATE / p_width_linear
+    if xr < -p_width_neutral / 2:
+        a = a
+        b = -a * (-p_width_neutral / 2)  # (+0)
+    elif xr > +p_width_neutral / 2:
+        a = a
+        b = -a * (+p_width_neutral / 2)  # (+0)
+    else:
+        return 0
+
+    return a * xr + b
 
 
 def render_ball_velocity(ball: Ball):
@@ -401,7 +460,7 @@ class Game:
         self.paddle: Paddle = Paddle(
             rect=pg.Rect(
                 (0, 0),
-                V2(100, 20),
+                V2(300, 20),
             ).move_to(center=(GAME_FIELD_WIDTH / 2, GAME_FIELD_HEIGHT - 30)),
             vel=V2(0, 0),
             color=COLORS["LIGHT_GREY"],
@@ -423,10 +482,9 @@ class Game:
         brick_width = 40
         brick_height = 20
         for i in range(int(800 / brick_width)):
-            if i % 2 == 0:
-                continue
-
             for j in range(int(500 / brick_height)):
+                if j % 2 == 0:
+                    continue
                 self.bricks.append(
                     Brick(
                         pg.Rect((i * brick_width, j * brick_height), (brick_width, brick_height)),

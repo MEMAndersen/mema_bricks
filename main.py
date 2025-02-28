@@ -16,9 +16,8 @@ V2 = pg.Vector2
 # pygame setup
 pg.init()
 CLOCK: pg.Clock = pg.time.Clock()
-FPS = 80  # frame per sec
-CPS = 200  # Compute per sec
-DT_TOL = 1e-7  # seconds tolerance when considering multiple collisions at the same time
+FPS = 60  # frame per sec
+DT_TOL = 0.01  # ms tolerance when considering multiple collisions at the same time
 
 # fonts setup
 pg.freetype.init()  # type: ignore
@@ -73,13 +72,10 @@ class Dir(Enum):
     STATIONARY = auto()
 
 
-def show_fps_cps(fps: float, cps: float) -> None:
+def show_fps_cps(fps: float) -> None:
     size = 25
     fps_text, _ = FONT.render(f"FPS: {int(fps)}", COLORS["YELLOW"], size=size)
-    cps_text, _ = FONT.render(f"CPS: {int(cps)}", COLORS["YELLOW"], size=size)
-
     SCREEN.blit(fps_text, fps_text.get_rect(topleft=(0, 0)))
-    SCREEN.blit(cps_text, cps_text.get_rect(topleft=(0, size + 5)))
 
 
 # Global variables
@@ -354,7 +350,7 @@ class Ball(MovingEntity):
                     collisions.append(y_collision)
                 continue
 
-            # Neither is stationary the greatest is the one that limits the hit
+            # Neither is stationary
             if abs(pc_dtx - pc_dty) < DT_TOL:
                 # Collisions in x and y happen simultaneously)
                 collisions.append(x_collision)
@@ -526,18 +522,12 @@ class Game:
 def main():
     game = Game()
     dt: int = 0  # ms
-    frame_dt: int = 0  # ms
-    fps: list[float] = [0.0]
 
     while True:
-        # Clear screen
-        SCREEN.fill(COLORS["BLACK"])
-        GAME_FIELD_SURFACE.fill(COLORS["DARK_GREY"])
-
         if pg.event.peek(pg.QUIT):
             game.state = States.EXITING
 
-        # Update and collision
+        # Update loop
         match game.state:
             case States.MAIN_MENU_SCREEN:
                 pass
@@ -554,37 +544,33 @@ def main():
                 dt: int = 0
                 continue
 
-        # Update the clock
-        dt: int = CLOCK.tick(CPS)
-        frame_dt += dt
-        cps = CLOCK.get_fps()
-        show_fps_cps(cps, sum(fps) / 10)
-
         # Render
-        if frame_dt >= 1e3 / FPS:
-            match game.state:
-                case States.MAIN_MENU_SCREEN:
-                    pass
-                case States.GAME_RUNNING:
-                    game.game_loop_render()
-                case States.GAME_PAUSED:
-                    game.paused_loop_logic()
-                case States.GAME_OVER_SCREEN:
-                    pass
-                case States.EXITING:
-                    game.exiting()
-                case States.RESTART:
-                    game = Game()
-                    dt: int = 0
-                    continue
+        # Clear screen
+        SCREEN.fill(COLORS["BLACK"])
+        GAME_FIELD_SURFACE.fill(COLORS["DARK_GREY"])
+        show_fps_cps(CLOCK.get_fps())
 
-            # Update the screen
-            pg.display.flip()
-            fps.append(1e3 / frame_dt)
-            if len(fps) > 10:
-                fps.pop(0)
+        match game.state:
+            case States.MAIN_MENU_SCREEN:
+                pass
+            case States.GAME_RUNNING:
+                game.game_loop_render()
+            case States.GAME_PAUSED:
+                game.paused_loop_logic()
+            case States.GAME_OVER_SCREEN:
+                pass
+            case States.EXITING:
+                game.exiting()
+            case States.RESTART:
+                game = Game()
+                dt: int = 0
+                continue
 
-            frame_dt -= int(1e3 / FPS)
+        # Update the screen
+        pg.display.flip()
+
+        # Update the clock
+        dt: int = CLOCK.tick(FPS)
 
 
 if __name__ == "__main__":

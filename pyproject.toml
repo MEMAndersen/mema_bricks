@@ -7,13 +7,10 @@ requires-python = ">=3.12"
 dependencies = ["pygame-ce>=2.5.3"]
 
 [project.optional-dependencies]
-sandbox = [
-    "matplotlib>=3.10.1",
-    "numpy>=2.2.3",
-]
 
 [dependency-groups]
 dev = ["ruff>=0.9.7"]
+package-to-exe = ["pyinstaller>=6.12.0"]
 
 [tool.ruff]
 line-length = 120

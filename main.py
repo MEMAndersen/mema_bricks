@@ -6,6 +6,8 @@ from sys import exit
 from typing import ClassVar, Sequence
 
 import pygame as pg
+import pygame.freetype
+
 
 # Debug flag
 DEBUG = True
@@ -20,8 +22,8 @@ FPS = 60  # frame per sec
 DT_TOL = 0.01  # ms tolerance when considering multiple collisions at the same time
 
 # fonts setup
-pg.freetype.init()  # type: ignore
-FONT: pg.freetype.Font = pg.freetype.Font(Path(r"assets\fonts\PixelIntv-OPxd.ttf"))  # type: ignore
+pygame.freetype.init()
+FONT: pygame.freetype.Font = pygame.freetype.Font(Path(r"assets\fonts\PixelIntv-OPxd.ttf"))
 
 COLORS: dict[str, pg.typing.ColorLike] = {
     "BLACK": (0, 0, 0),
@@ -426,7 +428,7 @@ class Ball(MovingEntity):
 
 def reflect_rotate(paddle: Paddle, x) -> float:
     PADDLE_REFLECT_MAX_ROTATE = 8  # degrees
-    PADDLE_NEUTRAL_REFLECT_RATIO = 0.05
+    PADDLE_NEUTRAL_REFLECT_RATIO = 0.00
 
     p_width = paddle.rect.width
     p_width_neutral = p_width * PADDLE_NEUTRAL_REFLECT_RATIO
@@ -460,7 +462,7 @@ class Game:
         self.paddle: Paddle = Paddle(
             rect=pg.Rect(
                 (0, 0),
-                V2(300, 20),
+                V2(100, 20),
             ).move_to(center=(GAME_FIELD_WIDTH / 2, GAME_FIELD_HEIGHT - 30)),
             vel=V2(0, 0),
             color=COLORS["LIGHT_GREY"],
@@ -558,7 +560,6 @@ class Game:
             self.bricks.remove(entity)
 
     def game_loop_render(self) -> None:
-        render_ball_velocity(self.balls[0])
         self.render_all_entities()
 
     def paused_loop_logic(self) -> None:

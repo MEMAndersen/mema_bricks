@@ -24,10 +24,12 @@ class Entity(ABC):
     rect: pg.Rect
     color: pg.typing.ColorLike
     enabled_collision_sides: set[Dir] = field(default_factory=lambda: set([Dir.LEFT, Dir.RIGHT, Dir.UP, Dir.DOWN]))
-    to_be_deleted: bool = False
+    to_be_deleted_flag: bool = False
+    render_flag: bool = True
 
     def render(self) -> None:
-        pg.draw.rect(GAME_FIELD_SURFACE, self.color, self.rect)
+        if self.render_flag:
+            pg.draw.rect(GAME_FIELD_SURFACE, self.color, self.rect)
 
         if DEBUG:
             self.debug_render()
@@ -105,13 +107,15 @@ class Paddle(MovingEntity):
 class Edge(Entity):
     thickness: ClassVar[int] = EDGE_WIDTH
     color: pg.typing.ColorLike = COLORS["WHITE"]
+    render_flag: bool = False
 
     @abstractmethod
     def render_transform(self) -> dict[str, tuple[int, int]]: ...
 
     def render(self) -> None:
         # EDGES RENDER DIRECTLY TO SCREEN
-        pg.draw.rect(SCREEN, self.color, self.rect.move_to(**self.render_transform()))
+        if self.render_flag:
+            pg.draw.rect(SCREEN, self.color, self.rect.move_to(**self.render_transform()))
 
 
 class LeftEdge(Edge):
@@ -154,28 +158,29 @@ class Brick(Entity):
 
 
 def update_enabled_collision_sides(bricks_to_check: Sequence[Brick], others: Sequence[Entity]):
-    for brick in [b for b in bricks_to_check if not b.to_be_deleted]:
+    for brick in [b for b in bricks_to_check if not b.to_be_deleted_flag]:
         brick.enabled_collision_sides = set([Dir.LEFT, Dir.RIGHT, Dir.TOP, Dir.BOTTOM])
 
-        possible_neighbors = [e for e in others if not e.to_be_deleted] + [
-            e for e in brick.neighbors if not e.to_be_deleted
+        possible_neighbors = [e for e in others if not e.to_be_deleted_flag] + [
+            e for e in brick.neighbors if not e.to_be_deleted_flag
         ]
 
         for other in possible_neighbors:
             if other == brick:
                 continue
 
-            if Dir.LEFT in brick.enabled_collision_sides and other.rect.clipline(brick.left_line()):
-                brick.enabled_collision_sides.remove(Dir.LEFT)
+            # TODO: Think about this when blocks can be staggered
+            # if Dir.LEFT in brick.enabled_collision_sides and other.rect.clipline(brick.left_line()):
+            #     brick.enabled_collision_sides.remove(Dir.LEFT)
 
-            if Dir.RIGHT in brick.enabled_collision_sides and other.rect.clipline(brick.right_line()):
-                brick.enabled_collision_sides.remove(Dir.RIGHT)
+            # if Dir.RIGHT in brick.enabled_collision_sides and other.rect.clipline(brick.right_line()):
+            #     brick.enabled_collision_sides.remove(Dir.RIGHT)
 
-            if Dir.TOP in brick.enabled_collision_sides and other.rect.clipline(brick.top_line()):
-                brick.enabled_collision_sides.remove(Dir.TOP)
+            # if Dir.TOP in brick.enabled_collision_sides and other.rect.clipline(brick.top_line()):
+            #     brick.enabled_collision_sides.remove(Dir.TOP)
 
-            if Dir.BOTTOM in brick.enabled_collision_sides and other.rect.clipline(brick.bottom_line()):
-                brick.enabled_collision_sides.remove(Dir.BOTTOM)
+            # if Dir.BOTTOM in brick.enabled_collision_sides and other.rect.clipline(brick.bottom_line()):
+            #     brick.enabled_collision_sides.remove(Dir.BOTTOM)
 
 
 @dataclass
@@ -319,7 +324,7 @@ class Ball(MovingEntity):
     def reflect_on_paddle(self, reflect_dir: Dir, paddle: Paddle) -> None:
         angle_change = reflect_rotate(paddle, self.rect.centerx)
 
-        if reflect_dir == Dir.UP:
+        if reflect_dir == Dir.BOTTOM:
             reflect_normal = get_vector_dir(reflect_dir).rotate(angle_change)
         else:
             reflect_normal = get_vector_dir(reflect_dir)

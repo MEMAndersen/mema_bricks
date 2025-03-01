@@ -16,6 +16,8 @@
         "MEIPASS",
         "mema",
         "midbottom",
+        "midleft",
+        "midright",
         "midtop",
         "pygame",
         "SRCALPHA"

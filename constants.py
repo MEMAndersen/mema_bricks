@@ -4,17 +4,24 @@ import pygame as pg
 import pygame.freetype
 
 # Debug flag
-DEBUG = True
+DEBUG: bool = True
 
 # Time constants
-FPS = 60  # frame per sec
-DT_TOL = 0.01  # ms tolerance when considering multiple collisions at the same time
+FPS: int = 60  # frame per sec
+DT_TOL: float = 0.01  # ms tolerance when considering multiple collisions at the same time
+SHOW_FPS: bool = True
+
+# Assets
+ASSETS_PATH = Path(r"assets")
+FONTS_PATH = ASSETS_PATH / "fonts"
+MAPS_PATH = ASSETS_PATH / "maps"
 
 # fonts constants
 pygame.freetype.init()
-FONT: pygame.freetype.Font = pygame.freetype.Font(Path(r"assets\fonts\PixelIntv-OPxd.ttf"))
+FONT: pygame.freetype.Font = pygame.freetype.Font(FONTS_PATH / "PixelIntv-OPxd.ttf")
 UI_TEXT_SIZE: int = 25
 PAUSE_TEXT_SIZE: int = 50
+ROW_COL_TEXT_SIZE: int = 10
 
 # Colors
 COLORS: dict[str, pg.typing.ColorLike] = {
@@ -28,6 +35,8 @@ COLORS: dict[str, pg.typing.ColorLike] = {
 }
 
 # Screen and geometry
+RENDER_GRID_FLAG: bool = True
+
 EDGE_WIDTH = 20
 
 SCREEN_WIDTH: int = 1248
@@ -40,6 +49,11 @@ GAME_FIELD_HEIGHT: int = SCREEN_HEIGHT - EDGE_WIDTH
 GAME_FIELD_SIZE: tuple[int, int] = (GAME_FIELD_WIDTH, GAME_FIELD_HEIGHT)
 GAME_FIELD_SURFACE: pg.Surface = pg.Surface(GAME_FIELD_SIZE)
 GAME_FIELD_RECT_TO_SCREEN: pg.Rect = GAME_FIELD_SURFACE.get_rect().move_to(midbottom=SCREEN.get_rect().midbottom)
+
+
+GRID_DX: int = 20
+GRID_DY: int = 20
+
 
 # Pause overlay
 PAUSE_OVERLAY: pg.Surface = pg.Surface(SCREEN_SIZE, pg.SRCALPHA)

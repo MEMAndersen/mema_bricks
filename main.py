@@ -1,5 +1,5 @@
 from sys import exit
-from typing import Sequence
+from typing import NoReturn, Sequence
 
 import pygame as pg
 
@@ -13,7 +13,9 @@ from constants import (
     GAME_FIELD_SURFACE,
     GAME_FIELD_WIDTH,
     PAUSE_OVERLAY,
+    RENDER_GRID_FLAG,
     SCREEN,
+    SHOW_FPS,
     UI_TEXT_SIZE,
     States,
 )
@@ -28,11 +30,7 @@ from entities import (
     TopEdge,
     update_enabled_collision_sides,
 )
-
-
-# pygame setup
-pg.init()
-CLOCK: pg.Clock = pg.time.Clock()
+from map import create_bricks_from_lvl_txt, render_grid, render_row_col_ids
 
 
 def show_fps_cps(fps: float) -> None:
@@ -49,7 +47,7 @@ class Game:
         self.paddle: Paddle = Paddle(
             rect=pg.Rect(
                 (0, 0),
-                pg.Vector2(100, 20),
+                pg.Vector2(800, 20),
             ).move_to(center=(GAME_FIELD_WIDTH / 2, GAME_FIELD_HEIGHT - 30)),
             vel=pg.Vector2(0, 0),
             color=COLORS["LIGHT_GREY"],
@@ -67,19 +65,7 @@ class Game:
         self.balls: list[Ball] = [self.ball]
 
         # Create bricks
-        self.bricks: list[Brick] = []
-        brick_width = 40
-        brick_height = 20
-        for i in range(int(800 / brick_width)):
-            for j in range(int(500 / brick_height)):
-                if j % 2 == 0:
-                    continue
-                self.bricks.append(
-                    Brick(
-                        pg.Rect((i * brick_width, j * brick_height), (brick_width, brick_height)),
-                        color=COLORS["LIGHT_GREY"],
-                    )
-                )
+        self.bricks: list[Brick] = create_bricks_from_lvl_txt("lessthan3.txt")
 
         # Create edges
         self.edges: list[Edge] = [
@@ -118,8 +104,6 @@ class Game:
                 self.state = States.GAME_PAUSED
 
     def game_loop_logic(self, dt: float) -> None:
-        global score
-
         # Handle input
         for event in pg.event.get():
             match event.dict:
@@ -138,12 +122,12 @@ class Game:
         for brick in self.bricks:
             if brick.health <= 0:
                 self.score += 5
-                brick.to_be_deleted = True
+                brick.to_be_deleted_flag = True
                 bricks_to_check.extend(brick.neighbors)
 
         update_enabled_collision_sides(bricks_to_check, self.edges)
 
-        for entity in [e for e in self.bricks if e.to_be_deleted]:
+        for entity in [e for e in self.bricks if e.to_be_deleted_flag]:
             self.bricks.remove(entity)
 
     def game_loop_render(self) -> None:
@@ -167,7 +151,11 @@ class Game:
         exit(0)
 
 
-def main():
+def main() -> NoReturn:
+    # pygame setup
+    pg.init()
+    CLOCK: pg.Clock = pg.time.Clock()
+
     game = Game()
     dt: int = 0  # ms
 
@@ -196,7 +184,13 @@ def main():
         # Clear screen
         SCREEN.fill(COLORS["BLACK"])
         GAME_FIELD_SURFACE.fill(COLORS["DARK_GREY"])
-        show_fps_cps(CLOCK.get_fps())
+
+        if RENDER_GRID_FLAG:
+            render_grid(20, 20)
+            render_row_col_ids(20, 20)
+
+        if SHOW_FPS:
+            show_fps_cps(CLOCK.get_fps())
 
         match game.state:
             case States.MAIN_MENU_SCREEN:

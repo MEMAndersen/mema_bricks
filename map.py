@@ -13,7 +13,7 @@ from constants import (
     SCREEN,
     MAPS_PATH,
 )
-from entities import Brick
+from entities.brick import Brick
 
 
 class MapReadError(ValueError): ...
@@ -114,5 +114,5 @@ def render_row_col_ids(dx: int, dy: int) -> None:
 
 
 if __name__ == "__main__":
-    lvltxt = load_lvl_txt_to_list("lvl1.txt")
-    print(lvltxt)
+    lvl_txt = load_lvl_txt_to_list("lvl1.txt")
+    print(lvl_txt)

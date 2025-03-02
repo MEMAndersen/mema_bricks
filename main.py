@@ -65,7 +65,7 @@ class Game:
         self.balls: list[Ball] = [self.ball]
 
         # Create bricks
-        self.bricks: list[Brick] = create_bricks_from_lvl_txt("lessthan3.txt")
+        self.bricks: list[Brick] = create_bricks_from_lvl_txt("lvl1.txt")
 
         # Create edges
         self.edges: list[Edge] = [

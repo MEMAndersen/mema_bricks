@@ -38,23 +38,19 @@ class Entity(ABC):
         if Dir.BOTTOM in self.enabled_collision_sides:
             pg.draw.line(GAME_FIELD_SURFACE, COLORS["DEBUG"], self.rect.bottomleft, self.rect.bottomright)
 
-    def left_line(self) -> tuple[pg.Vector2, pg.Vector2]:
-        test_rect = self.rect
-        return (test_rect.topleft + pg.Vector2(-1, 1), test_rect.bottomleft + pg.Vector2(-1, -1))
+    def neighbor_left_line(self) -> tuple[pg.Vector2, pg.Vector2]:
+        return (self.rect.topleft + pg.Vector2(-1, 0), self.rect.bottomleft + pg.Vector2(-1, 0))
 
-    def right_line(self) -> tuple[pg.Vector2, pg.Vector2]:
-        test_rect = self.rect
-        return (test_rect.topright + pg.Vector2(1, 1), test_rect.bottomright + pg.Vector2(1, -1))
+    def neighbor_right_line(self) -> tuple[pg.Vector2, pg.Vector2]:
+        return (self.rect.topright + pg.Vector2(1, 0), self.rect.bottomright + pg.Vector2(1, 0))
 
-    def top_line(self) -> tuple[pg.Vector2, pg.Vector2]:
-        test_rect = self.rect
-        return (test_rect.topleft + pg.Vector2(1, -1), test_rect.topright + pg.Vector2(-1, -1))
+    def neighbor_top_line(self) -> tuple[pg.Vector2, pg.Vector2]:
+        return (self.rect.topleft + pg.Vector2(0, -1), self.rect.topright + pg.Vector2(0, -1))
 
-    def bottom_line(self) -> tuple[pg.Vector2, pg.Vector2]:
-        test_rect = self.rect
-        return (test_rect.bottomleft + pg.Vector2(1, 1), test_rect.bottomright + pg.Vector2(-1, 1))
+    def neighbor_bottom_line(self) -> tuple[pg.Vector2, pg.Vector2]:
+        return (self.rect.bottomleft + pg.Vector2(0, 1), self.rect.bottomright + pg.Vector2(0, 1))
 
-    def is_neighbor(self, other) -> bool:
+    def neighbor_is_neighbor(self, other) -> bool:
         return self.rect.copy().inflate(4, 4).colliderect(other.rect)
 
 

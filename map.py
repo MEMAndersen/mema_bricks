@@ -13,7 +13,7 @@ from constants import (
     SCREEN,
     MAPS_PATH,
 )
-from entities.brick import Brick
+from entities.brick import Brick, bricks_dict
 
 
 class MapReadError(ValueError): ...
@@ -57,17 +57,17 @@ def create_bricks_from_lvl_txt(lvl_id: str) -> list[Brick]:
                 skip_cols -= 1
                 continue
 
-            match char:
-                case ".":
+            match bt := bricks_dict[char]:
+                case None:
                     continue
-                case "B":
-                    skip_cols = 1
+                case _:
                     bricks.append(
-                        Brick(
-                            rect=pg.rect.Rect((GRID_DX * col, GRID_DY * row), (40, 20)),
+                        bt(
+                            rect=pg.rect.Rect((GRID_DX * col, GRID_DY * row), (bt.width, bt.height)),
                             color=COLORS["LIGHT_GREY"],
                         ),
                     )
+                    skip_cols = bt.skip_cols()
 
     return bricks
 

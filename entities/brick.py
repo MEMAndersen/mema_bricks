@@ -1,5 +1,8 @@
-from constants import Dir
-from typing import Sequence
+from abc import ABC
+import pygame as pg
+
+from constants import GRID_DX, GRID_DY, Dir
+from typing import ClassVar, Sequence
 from . import Entity
 
 
@@ -7,12 +10,42 @@ from dataclasses import dataclass, field
 
 
 @dataclass
-class Brick(Entity):
-    health: int = 1
+class Brick(Entity, ABC):
+    width: ClassVar[int] = 0
+    height: ClassVar[int] = 0
+    health: int = 0
+    symbol: ClassVar[str] = "."
     neighbors: list["Brick"] = field(default_factory=lambda: list(), repr=False)
 
     def update_neighbors(self, others: list["Brick"]) -> None:
-        self.neighbors = [o for o in others if self.is_neighbor(o)]
+        self.neighbors = [o for o in others if self.neighbor_is_neighbor(o)]
+
+    @classmethod
+    def skip_cols(cls) -> int:
+        return int(cls.width / GRID_DX) - 1
+
+
+@dataclass
+class BrickSquare(Brick):
+    width: ClassVar[int] = GRID_DX
+    height: ClassVar[int] = GRID_DY
+    health: int = 1
+    symbol: ClassVar[str] = "b"
+
+
+@dataclass
+class BrickLong(Brick):
+    width: ClassVar[int] = 2 * GRID_DX
+    height: ClassVar[int] = GRID_DY
+    health: int = 1
+    symbol: ClassVar[str] = "B"
+
+
+bricks_dict: dict[str, type[Brick] | None] = {
+    ".": None,
+    "b": BrickSquare,
+    "B": BrickLong,
+}
 
 
 def update_enabled_collision_sides(bricks_to_check: Sequence[Brick], others: Sequence[Entity]):
@@ -28,14 +61,28 @@ def update_enabled_collision_sides(bricks_to_check: Sequence[Brick], others: Seq
                 continue
 
             # TODO: Think about this when blocks can be staggered
-            # if Dir.LEFT in brick.enabled_collision_sides and other.rect.clipline(brick.left_line()):
-            #     brick.enabled_collision_sides.remove(Dir.LEFT)
+            if Dir.LEFT in brick.enabled_collision_sides and (
+                points := other.rect.clipline(brick.neighbor_left_line())
+            ):
+                p1, p2 = (pg.Vector2(points[0]), pg.Vector2(points[1]))
+                if abs(p2.y - p1.y) == brick.rect.height - 1:
+                    brick.enabled_collision_sides.remove(Dir.LEFT)
 
-            # if Dir.RIGHT in brick.enabled_collision_sides and other.rect.clipline(brick.right_line()):
-            #     brick.enabled_collision_sides.remove(Dir.RIGHT)
+            if Dir.RIGHT in brick.enabled_collision_sides and (
+                points := other.rect.clipline(brick.neighbor_right_line())
+            ):
+                p1, p2 = (pg.Vector2(points[0]), pg.Vector2(points[1]))
+                if abs(p2.y - p1.y) == brick.rect.height - 1:
+                    brick.enabled_collision_sides.remove(Dir.RIGHT)
 
-            # if Dir.TOP in brick.enabled_collision_sides and other.rect.clipline(brick.top_line()):
-            #     brick.enabled_collision_sides.remove(Dir.TOP)
+            if Dir.TOP in brick.enabled_collision_sides and (points := other.rect.clipline(brick.neighbor_top_line())):
+                p1, p2 = (pg.Vector2(points[0]), pg.Vector2(points[1]))
+                if abs(p2.x - p1.x) == brick.rect.width - 1:
+                    brick.enabled_collision_sides.remove(Dir.TOP)
 
-            # if Dir.BOTTOM in brick.enabled_collision_sides and other.rect.clipline(brick.bottom_line()):
-            #     brick.enabled_collision_sides.remove(Dir.BOTTOM)
+            if Dir.BOTTOM in brick.enabled_collision_sides and (
+                points := other.rect.clipline(brick.neighbor_bottom_line())
+            ):
+                p1, p2 = (pg.Vector2(points[0]), pg.Vector2(points[1]))
+                if abs(p2.x - p1.x) == brick.rect.width - 1:
+                    brick.enabled_collision_sides.remove(Dir.BOTTOM)

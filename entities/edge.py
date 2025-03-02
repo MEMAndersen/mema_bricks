@@ -1,3 +1,4 @@
+from dataclasses import dataclass, field
 from constants import COLORS, EDGE_WIDTH, GAME_FIELD_HEIGHT, GAME_FIELD_RECT_TO_SCREEN, GAME_FIELD_WIDTH, SCREEN, Dir
 from . import Entity
 
@@ -9,8 +10,8 @@ from abc import abstractmethod
 from typing import ClassVar
 
 
+@dataclass
 class Edge(Entity):
-    thickness: ClassVar[int] = EDGE_WIDTH
     color: pg.typing.ColorLike = COLORS["WHITE"]
     render_flag: bool = False
 
@@ -23,31 +24,41 @@ class Edge(Entity):
             pg.draw.rect(SCREEN, self.color, self.rect.move_to(**self.render_transform()))
 
 
+@dataclass
 class LeftEdge(Edge):
-    enabled_collision_sides: set[Dir] = set([Dir.RIGHT])
+    rect: pg.Rect = field(
+        default_factory=lambda: pg.Rect((-EDGE_WIDTH, 0), (EDGE_WIDTH, GAME_FIELD_HEIGHT)), init=False
+    )
 
-    def __init__(self) -> None:
-        self.rect = pg.Rect((-self.thickness, 0), (self.thickness, GAME_FIELD_HEIGHT))
+    def __post_init__(self) -> None:
+        self.enabled_collision_sides = set([Dir.RIGHT])
 
     def render_transform(self) -> dict[str, tuple[int, int]]:
         return {"bottomright": GAME_FIELD_RECT_TO_SCREEN.bottomleft}
 
 
+@dataclass
 class RightEdge(Edge):
-    enabled_collision_sides: set[Dir] = set([Dir.LEFT])
+    rect: pg.Rect = field(
+        default_factory=lambda: pg.Rect((GAME_FIELD_WIDTH, 0), (EDGE_WIDTH, GAME_FIELD_HEIGHT)), init=False
+    )
 
-    def __init__(self):
-        self.rect = pg.Rect((GAME_FIELD_WIDTH, 0), (self.thickness, GAME_FIELD_HEIGHT))
+    def __post_init__(self) -> None:
+        self.enabled_collision_sides = set([Dir.LEFT])
 
     def render_transform(self) -> dict[str, tuple[int, int]]:
         return {"bottomleft": GAME_FIELD_RECT_TO_SCREEN.bottomright}
 
 
+@dataclass
 class TopEdge(Edge):
-    enabled_collision_sides: set[Dir] = set([Dir.BOTTOM])
+    rect: pg.Rect = field(
+        default_factory=lambda: pg.Rect((EDGE_WIDTH, -EDGE_WIDTH), (GAME_FIELD_WIDTH + 2 * EDGE_WIDTH, EDGE_WIDTH)),
+        init=False,
+    )
 
-    def __init__(self):
-        self.rect = pg.Rect((self.thickness, -self.thickness), (GAME_FIELD_WIDTH + 2 * self.thickness, self.thickness))
+    def __post_init__(self) -> None:
+        self.enabled_collision_sides = set([Dir.BOTTOM])
 
     def render_transform(self) -> dict[str, tuple[int, int]]:
         return {"midbottom": GAME_FIELD_RECT_TO_SCREEN.midtop}

@@ -1,13 +1,11 @@
-from constants import DT_TOL, Dir, get_vector_dir
-from . import Entity, MovingEntity
-from . import Paddle
-
+from dataclasses import dataclass
+from typing import Sequence
 
 import pygame as pg
 
+from constants import DT_TOL, Dir, get_vector_dir
 
-from dataclasses import dataclass
-from typing import Sequence
+from . import Entity, HealthComponent, MovingEntity, Paddle, ScoreComponent, on_collision_components_list
 
 
 def reflect_rotate(paddle: Paddle, x) -> float:
@@ -161,8 +159,13 @@ class Ball(MovingEntity):
             self.reflect_on_paddle(collide_dir, colliding_entity)
         else:
             self.reflect(collide_dir)
-            if hasattr(colliding_entity, "health"):
-                colliding_entity.health -= self.damage
+
+        for component in [c for c in colliding_entity.components if type(c) in on_collision_components_list]:
+            match component:
+                case HealthComponent():
+                    colliding_entity.to_be_deleted_flag = component.take_damage(self.damage)
+                case ScoreComponent():
+                    component.on_hit()
 
     def reflect(self, reflect_dir: Dir) -> None:
         reflect_normal = get_vector_dir(reflect_dir)

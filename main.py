@@ -28,9 +28,13 @@ from entities import (
     Paddle,
     RightEdge,
     TopEdge,
+    on_delete_component_list,
     update_enabled_collision_sides,
+    ScoreComponent,
 )
 from map import create_bricks_from_lvl_txt, render_grid, render_row_col_ids
+
+from globals import score
 
 
 def show_fps_cps(fps: float) -> None:
@@ -41,7 +45,9 @@ def show_fps_cps(fps: float) -> None:
 class Game:
     def __init__(self) -> None:
         self.state: States = States.GAME_RUNNING
-        self.score: int = 0
+
+        global score
+        score = 0
 
         # Create paddle
         self.paddle: Paddle = Paddle(
@@ -89,7 +95,9 @@ class Game:
         SCREEN.blit(GAME_FIELD_SURFACE, GAME_FIELD_RECT_TO_SCREEN)
 
     def render_score(self) -> None:
-        text, _ = FONT.render(f"score:{self.score:0>5}", COLORS["YELLOW"], size=UI_TEXT_SIZE)
+        global score
+
+        text, _ = FONT.render(f"score:{score:0>5}", COLORS["YELLOW"], size=UI_TEXT_SIZE)
         SCREEN.blit(text, text.get_rect(topleft=GAME_FIELD_RECT_TO_SCREEN.topright + pg.Vector2(EDGE_WIDTH + 10, 0)))
 
     def handle_pause_quit_restart(self, key, event_type) -> None:
@@ -104,6 +112,9 @@ class Game:
                 self.state = States.GAME_PAUSED
 
     def game_loop_logic(self, dt: float) -> None:
+        # Reset variables
+        bricks_to_check: list[Brick] = []
+
         # Handle input
         for event in pg.event.get():
             match event.dict:
@@ -118,17 +129,23 @@ class Game:
         for ball in self.balls:
             ball.move_and_collide(dt, others)
 
-        bricks_to_check: list[Brick] = []
-        for brick in self.bricks:
-            if brick.health <= 0:
-                self.score += 5
-                brick.to_be_deleted_flag = True
-                bricks_to_check.extend(brick.neighbors)
+        for entity in [e for e in self.get_all_entities() if e.to_be_deleted_flag]:
+            for component in [c for c in entity.components if type(c) in on_delete_component_list]:
+                match component:
+                    case ScoreComponent():
+                        component.on_death()
+
+            match entity:
+                case Brick():
+                    bricks_to_check.extend(entity.neighbors)
+                    self.bricks.remove(entity)
+                case Ball():
+                    self.balls.remove(entity)
+                    if len(self.balls) < 1:
+                        # TODO: Reduce life:
+                        ...
 
         update_enabled_collision_sides(bricks_to_check, self.edges)
-
-        for entity in [e for e in self.bricks if e.to_be_deleted_flag]:
-            self.bricks.remove(entity)
 
     def game_loop_render(self) -> None:
         self.render_all_entities()

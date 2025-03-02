@@ -4,6 +4,8 @@ from typing import Sequence
 
 import pygame as pg
 
+from . import Component
+
 from constants import (
     COLORS,
     DEBUG,
@@ -16,6 +18,7 @@ from constants import (
 class Entity(ABC):
     rect: pg.Rect
     color: pg.typing.ColorLike
+    components: list[Component] = field(default_factory=lambda: [])
     enabled_collision_sides: set[Dir] = field(default_factory=lambda: set([Dir.LEFT, Dir.RIGHT, Dir.UP, Dir.DOWN]))
     to_be_deleted_flag: bool = False
     render_flag: bool = True

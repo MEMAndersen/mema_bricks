@@ -1,19 +1,19 @@
 from abc import ABC
+from dataclasses import dataclass, field
+from typing import ClassVar, Sequence
+
 import pygame as pg
 
 from constants import GRID_DX, GRID_DY, Dir
-from typing import ClassVar, Sequence
-from . import Entity
+from entities.components import ScoreComponent
 
-
-from dataclasses import dataclass, field
+from . import Entity, HealthComponent
 
 
 @dataclass
 class Brick(Entity, ABC):
     width: ClassVar[int] = 0
     height: ClassVar[int] = 0
-    health: int = 0
     symbol: ClassVar[str] = "."
     neighbors: list["Brick"] = field(default_factory=lambda: list(), repr=False)
 
@@ -29,16 +29,22 @@ class Brick(Entity, ABC):
 class BrickSquare(Brick):
     width: ClassVar[int] = GRID_DX
     height: ClassVar[int] = GRID_DY
-    health: int = 1
     symbol: ClassVar[str] = "b"
+
+    def __post_init__(self) -> None:
+        self.components.append(HealthComponent(health=1, max_health=1))
+        self.components.append(ScoreComponent(score_death=4, score_hit=1))
 
 
 @dataclass
 class BrickLong(Brick):
     width: ClassVar[int] = 2 * GRID_DX
     height: ClassVar[int] = GRID_DY
-    health: int = 1
     symbol: ClassVar[str] = "B"
+
+    def __post_init__(self) -> None:
+        self.components.append(HealthComponent(health=1, max_health=1))
+        self.components.append(ScoreComponent(score_death=8, score_hit=2))
 
 
 bricks_dict: dict[str, type[Brick] | None] = {

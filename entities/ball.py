@@ -193,14 +193,10 @@ class Ball(MovingEntity):
 
         vel_angle = self.vel.angle_to(pg.Vector2(0, -1))
 
-        print(f"{vel_angle=}")
-
         if abs(vel_angle) >= 90:
             return
 
         if vel_angle < -MINIMUM_VEL_ANGLE:
             self.vel.rotate_ip((vel_angle + MINIMUM_VEL_ANGLE))
-            print(f"CLAMPED: {self.vel.angle_to(pg.Vector2(0, -1))}")
         elif vel_angle > MINIMUM_VEL_ANGLE:
             self.vel.rotate_ip((vel_angle - MINIMUM_VEL_ANGLE))
-            print(f"CLAMPED: {self.vel.angle_to(pg.Vector2(0, -1))}")

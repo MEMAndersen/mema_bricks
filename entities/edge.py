@@ -7,7 +7,6 @@ import pygame as pg
 
 
 from abc import abstractmethod
-from typing import ClassVar
 
 
 @dataclass

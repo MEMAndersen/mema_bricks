@@ -3,9 +3,9 @@ from typing import NoReturn, Sequence
 
 import pygame as pg
 
+import globals
 from constants import (
     COLORS,
-    EDGE_WIDTH,
     FONT,
     FPS,
     GAME_FIELD_HEIGHT,
@@ -27,14 +27,14 @@ from entities import (
     LeftEdge,
     Paddle,
     RightEdge,
+    ScoreComponent,
     TopEdge,
     on_delete_component_list,
     update_enabled_collision_sides,
-    ScoreComponent,
 )
 from map import create_bricks_from_lvl_txt, render_grid, render_row_col_ids
 
-from globals import score
+globals.init_globals()
 
 
 def show_fps_cps(fps: float) -> None:
@@ -46,14 +46,13 @@ class Game:
     def __init__(self) -> None:
         self.state: States = States.GAME_RUNNING
 
-        global score
-        score = 0
+        globals.reset_score()
 
         # Create paddle
         self.paddle: Paddle = Paddle(
             rect=pg.Rect(
                 (0, 0),
-                pg.Vector2(800, 20),
+                pg.Vector2(100, 20),
             ).move_to(center=(GAME_FIELD_WIDTH / 2, GAME_FIELD_HEIGHT - 30)),
             vel=pg.Vector2(0, 0),
             color=COLORS["LIGHT_GREY"],
@@ -93,12 +92,6 @@ class Game:
             entity.render()
 
         SCREEN.blit(GAME_FIELD_SURFACE, GAME_FIELD_RECT_TO_SCREEN)
-
-    def render_score(self) -> None:
-        global score
-
-        text, _ = FONT.render(f"score:{score:0>5}", COLORS["YELLOW"], size=UI_TEXT_SIZE)
-        SCREEN.blit(text, text.get_rect(topleft=GAME_FIELD_RECT_TO_SCREEN.topright + pg.Vector2(EDGE_WIDTH + 10, 0)))
 
     def handle_pause_quit_restart(self, key, event_type) -> None:
         if event_type == pg.KEYDOWN:
@@ -149,7 +142,7 @@ class Game:
 
     def game_loop_render(self) -> None:
         self.render_all_entities()
-        self.render_score()
+        globals.render_score()
 
     def paused_loop_logic(self) -> None:
         # Handle input
@@ -160,7 +153,7 @@ class Game:
 
     def paused_loop_render(self) -> None:
         self.render_all_entities()
-        self.render_score()
+        globals.render_score()
         SCREEN.blit(PAUSE_OVERLAY)
 
     def exiting(self) -> None:

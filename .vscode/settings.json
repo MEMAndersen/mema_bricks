@@ -6,6 +6,7 @@
     "python.analysis.languageServerMode": "full",
     "python.analysis.typeCheckingMode": "standard",
     "cSpell.words": [
+        "aalines",
         "blit",
         "centerx",
         "clipline",

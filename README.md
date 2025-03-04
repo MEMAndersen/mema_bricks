@@ -12,3 +12,4 @@ uv run main.py
 - Sprites
 - Main menu
 - Game over screen
+- ~~Ball trail~~

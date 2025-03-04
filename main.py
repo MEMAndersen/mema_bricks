@@ -21,6 +21,7 @@ from constants import (
 )
 from entities import (
     Ball,
+    BallTrailComponent,
     Brick,
     Edge,
     Entity,
@@ -30,6 +31,8 @@ from entities import (
     ScoreComponent,
     TopEdge,
     on_delete_component_list,
+    on_render_component_list,
+    on_update_component_list,
     update_enabled_collision_sides,
 )
 from map import create_bricks_from_lvl_txt, render_grid, render_row_col_ids
@@ -66,6 +69,7 @@ class Game:
             ).move_to(midbottom=self.paddle.rect.midtop),
             vel=pg.Vector2(-1, -1),
             color=COLORS["WHITE"],
+            components=[BallTrailComponent(2000, COLORS["WHITE"])],
         )
         self.balls: list[Ball] = [self.ball]
 
@@ -85,11 +89,16 @@ class Game:
         update_enabled_collision_sides(self.bricks, self.edges)
 
     def get_all_entities(self) -> Sequence[Entity]:
-        return [self.paddle] + self.balls + self.bricks + self.edges
+        return self.edges + self.bricks + self.balls + [self.paddle]
 
     def render_all_entities(self) -> None:
         for entity in self.get_all_entities():
             entity.render()
+
+            for component in [c for c in entity.components if type(c) in on_render_component_list]:
+                match component:
+                    case BallTrailComponent():
+                        component.render()
 
         SCREEN.blit(GAME_FIELD_SURFACE, GAME_FIELD_RECT_TO_SCREEN)
 
@@ -122,6 +131,7 @@ class Game:
         for ball in self.balls:
             ball.move_and_collide(dt, others)
 
+        # Do deletion
         for entity in [e for e in self.get_all_entities() if e.to_be_deleted_flag]:
             for component in [c for c in entity.components if type(c) in on_delete_component_list]:
                 match component:
@@ -138,7 +148,13 @@ class Game:
                         # TODO: Reduce life:
                         ...
 
+        # Update variables
         update_enabled_collision_sides(bricks_to_check, self.edges)
+        for entity in [e for e in self.get_all_entities()]:
+            for component in [c for c in entity.components if type(c) in on_update_component_list]:
+                match component:
+                    case BallTrailComponent():
+                        component.update()
 
     def game_loop_render(self) -> None:
         self.render_all_entities()

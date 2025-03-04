@@ -4,7 +4,7 @@ from typing import Sequence
 
 import pygame as pg
 
-from . import Component
+from . import BallTrailComponent, Component, on_move_component_list
 
 from constants import (
     COLORS,
@@ -71,3 +71,8 @@ class MovingEntity(Entity, ABC):
     def move(self, dt) -> None:
         self.vel.clamp_magnitude_ip(0, self.max_speed)
         self.rect.move_ip(self.vel * dt)
+
+        for component in [c for c in self.components if type(c) in on_move_component_list]:
+            match component:
+                case BallTrailComponent():
+                    component.add_segment(self.rect.center, dt)

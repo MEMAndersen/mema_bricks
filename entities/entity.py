@@ -60,6 +60,7 @@ class Entity(ABC):
 @dataclass
 class MovingEntity(Entity, ABC):
     speed: float = 0  # pix/ms
+    min_speed: float = 0  # pix/ms
     max_speed: float = float("inf")  # pix/ms
     vel: pg.Vector2 = field(default_factory=lambda: pg.Vector2(0, 0))
 

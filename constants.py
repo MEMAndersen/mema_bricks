@@ -93,3 +93,14 @@ def get_vector_dir(reflect_dir: Dir) -> pg.Vector2:
             return pg.Vector2(0.0, -1.0)
         case _:
             return pg.Vector2(0.0, 0.0)
+
+
+## Paddle constants
+PADDLE_START_SPEED = 300.0 * 1e-3  # pix/ms
+PADDLE_MIN_SPEED = 150.0 * 1e-3  # pix/ms
+PADDLE_MAX_SPEED = 9999.0 * 1e-3  # pix/ms
+
+## Ball constants
+BALL_START_SPEED = 500.0 * 1e-3  # pix/ms
+BALL_MIN_SPEED = 400.0 * 1e-3  # pix/ms
+BALL_MAX_SPEED = 1000.0 * 1e-3  # pix/ms

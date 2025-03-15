@@ -1,4 +1,4 @@
-from constants import GAME_FIELD_SURFACE, Dir
+from constants import GAME_FIELD_SURFACE, PADDLE_MAX_SPEED, PADDLE_START_SPEED, Dir
 from . import MovingEntity
 
 
@@ -10,8 +10,9 @@ from dataclasses import dataclass, field
 
 @dataclass
 class Paddle(MovingEntity):
-    speed: float = 300.0 * 1e-3  # pix/ms
-    max_speed: float = float("inf")  # pix/ms
+    speed: float = PADDLE_START_SPEED  # pix/ms
+    min_speed: float = PADDLE_MIN_SPEED  # pix/ms
+    max_speed: float = PADDLE_MAX_SPEED  # pix/ms
     enabled_collision_sides: set[Dir] = field(default_factory=lambda: set([Dir.LEFT, Dir.RIGHT, Dir.UP]))
 
     def handle_keyboard_input(self, key, event_type) -> None:

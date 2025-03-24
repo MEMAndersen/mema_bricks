@@ -1,4 +1,4 @@
-from constants import GAME_FIELD_SURFACE, PADDLE_MAX_SPEED, PADDLE_START_SPEED, Dir
+from constants import GAME_FIELD_SURFACE, PADDLE_MAX_SPEED, PADDLE_MIN_SPEED, PADDLE_START_SPEED, Dir
 from . import MovingEntity
 
 
